@@ -14,9 +14,10 @@ def main():
     while cap.isOpened():
         success, frame = cap.read()
         if not success:
+            print("DEBUG: Erro ao capturar frame da webcam.")
             break
 
-        # 1. Realiza a detecção com rastreamento (Track)
+        # 1. Realiza a detecção com rastreamento
         resultado = detector.detectar(frame)
         
         # Debug: mostrar informações sobre o frame e detecções
@@ -31,38 +32,48 @@ def main():
                 print(f"DEBUG: Classes: {nomes_classes}, Confianças: {[f'{c:.2f}' for c in confiancas]}, IDs: {ids_detectados}")
         else:
             print("DEBUG: Nenhum resultado de detecção")
-        
-        # 2. Verifica se houve alguma detecção com ID atribuído
-        
+
         # 2. Verifica se houve alguma detecção com ID atribuído
         if resultado.boxes is not None and resultado.boxes.id is not None:
-            # Pegamos os IDs e Confianças de todas as detecções no frame
             ids = resultado.boxes.id.int().cpu().tolist()
             confiancas = resultado.boxes.conf.cpu().tolist()
 
             print(f"DEBUG: {len(ids)} detecções com ID - IDs: {ids}, Confianças: {[f'{c:.2f}' for c in confiancas]}")
 
             for i, obj_id in enumerate(ids):
-                # Se o objeto é novo e a confiança é alta (ex: > 70%)
+                # Se o objeto é novo e a confiança é alta
                 if obj_id not in ids_processados and confiancas[i] > 0.40:
                     print(f"DEBUG: Salvando foto para ID {obj_id} (confiança: {confiancas[i]:.2f})")
-                    # Tira a foto
-                    caminho_foto = detector.salvar_snapshot(frame, resultado)
                     
-                    # Adiciona ao set para não tirar foto da mesma mala no próximo frame
+                    # 3. Salva a imagem da bagagem
+                    caminho_foto = detector.salvar_snapshot(frame, resultado)
+
+                    # 4. Procura código de barras na imagem salva
+                    codigos = detector.detectar_codigo_barras(caminho_foto)
+
+                    if codigos:
+                        for codigo in codigos:
+                            print(f"✅ Código detectado: {codigo['valor']} ({codigo['tipo']})")
+                    else:
+                        print("⚠️ Nenhum código de barras encontrado na imagem da bagagem.")
+
+                    # 5. Marca esse ID como processado
                     ids_processados.add(obj_id)
                     print(f"✅ Nova bagagem (ID {obj_id}) detectada e registrada!")
+
                 else:
                     if obj_id in ids_processados:
                         print(f"DEBUG: ID {obj_id} já foi processado")
-                    elif confiancas[i] <= 0.70:
-                        print(f"DEBUG: ID {obj_id} confiança baixa ({confiancas[i]:.2f} <= 0.70)")
+                    elif confiancas[i] <= 0.40:
+                        print(f"DEBUG: ID {obj_id} confiança baixa ({confiancas[i]:.2f} <= 0.40)")
         else:
-            print("DEBUG: Nenhuma detecção com ID encontrada (bagagem não detectada ou confiança baixa)")
+            print("DEBUG: Nenhuma detecção com ID encontrada (bagagem não detectada ou sem rastreamento)")
+
         annotated_frame = resultado.plot()
         cv2.imshow("Monitoramento Ejetora (S2)", annotated_frame)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
             break
 
     cap.release()
