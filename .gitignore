@@ -211,3 +211,8 @@ __marimo__/
 __pycache__/
 .venv/
 env/
+
+
+# Ignorar imagens de teste capturadas localmente
+data/raw/*.jpg
+data/raw/*.png
