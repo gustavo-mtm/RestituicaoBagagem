@@ -3,3 +3,4 @@ ultralytics>=8.0.0
 lap>=0.5.12
 torch>=2.0.0
 torchvision>=0.15.0
+dynamsoft-barcode-reader-bundle>=1.0.0

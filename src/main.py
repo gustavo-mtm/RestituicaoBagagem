@@ -4,13 +4,19 @@ from datetime import datetime
 
 def main():
     cap = cv2.VideoCapture(0)  # 0 para webcam
-    detector = DetectorBagagem(tipo_codigo_permitido="EAN_13")
+    detector = DetectorBagagem()  # Aceita qualquer tipo de código de barras
     
     # Dicionário para controlar códigos de barras já registrados nesta sessão
     codigos_registrados = set()
 
-    print("Sistema de Leitura de Código de Barras - ELE634 Iniciado.")
-    print("Pressione 'q' para sair.")
+    print("╔════════════════════════════════════════════════════════════════╗")
+    print("║     Sistema de Leitura de Código de Barras - ELE634          ║")
+    print("╚════════════════════════════════════════════════════════════════╝")
+    
+    leitor_info = "Dynamsoft Barcode Reader (PRECISO)" if detector.usar_dynamsoft else "OpenCV (FALLBACK)"
+    print(f"\n📋 Leitor: {leitor_info}")
+    print("✅ Aceita qualquer tipo de código de barras")
+    print("⌨️  Pressione 'q' para sair\n")
 
     while cap.isOpened():
         success, frame = cap.read()
@@ -29,9 +35,12 @@ def main():
                 # Registra apenas códigos novos (não duplicados)
                 if valor not in codigos_registrados:
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                    print(f"✅ [{timestamp}] Código detectado: {valor} (Tipo: {tipo})")
+                    print(f"{'='*60}")
+                    print(f"✅ [{timestamp}]")
+                    print(f"   Valor: {valor}")
+                    print(f"   Tipo:  {tipo}")
+                    print(f"{'='*60}")
                     codigos_registrados.add(valor)
-                    # Aqui você pode adicionar gravação em banco de dados
         else:
             print("DEBUG: Aguardando código de barras...")
 

@@ -2,15 +2,39 @@ import cv2
 import os
 from datetime import datetime
 from ultralytics import YOLO
+from .leitor_dinamsoft import LeitorDynamsoft
 
 
 class DetectorBagagem:
-    def __init__(self, tipo_codigo_permitido=None):
+    def __init__(self, tipo_codigo_permitido=None, usar_dynamsoft=True):
+        """
+        Inicializa o detector de bagagens com suporte a leitura de código de barras.
+        
+        Args:
+            tipo_codigo_permitido (str, list, or None): Tipo(s) de código permitido(s)
+            usar_dynamsoft (bool): Se True, usa Dynamsoft (recomendado); 
+                                   Se False, usa OpenCV
+        """
         self.model = YOLO('yolov8n.pt')
         self.classes_interesse = [24, 28]
-
-        # Detector de código de barras do OpenCV
-        self.barcode_detector = cv2.barcode.BarcodeDetector()
+        self.usar_dynamsoft = usar_dynamsoft
+        
+        # Inicializa o leitor de código de barras
+        if usar_dynamsoft:
+            try:
+                self.leitor = LeitorDynamsoft()
+                print("✅ Usando Dynamsoft Barcode Reader para máxima precisão!")
+                self.barcode_detector = None  # Não usa OpenCV
+            except Exception as e:
+                print(f"⚠️  Aviso: Falha ao inicializar Dynamsoft ({e})")
+                print("   Revertendo para OpenCV Barcode Detector...")
+                self.barcode_detector = cv2.barcode.BarcodeDetector()
+                self.leitor = None
+                self.usar_dynamsoft = False
+        else:
+            # Detector de código de barras do OpenCV
+            self.barcode_detector = cv2.barcode.BarcodeDetector()
+            self.leitor = None
         
         # Tipo(s) de código de barras permitido(s)
         # Pode ser uma string para um único tipo ou lista para múltiplos tipos
@@ -49,6 +73,40 @@ class DetectorBagagem:
         return filepath
 
     def detectar_codigo_barras(self, caminho_imagem, tipo_permitido=None):
+        """
+        Detecta códigos de barras em uma imagem estática.
+        Usa Dynamsoft se disponível, caso contrário usa OpenCV.
+        """
+        # Se usar Dynamsoft
+        if self.usar_dynamsoft and self.leitor:
+            resultados_brutos = self.leitor.detectar_em_imagem(caminho_imagem)
+            
+            # Filtra pelos tipos permitidos
+            tipos_permitidos = self.tipos_permitidos
+            if tipo_permitido:
+                if isinstance(tipo_permitido, str):
+                    tipos_permitidos = [tipo_permitido]
+                else:
+                    tipos_permitidos = tipo_permitido
+            
+            resultados = []
+            for codigo in resultados_brutos:
+                tipo = codigo['tipo']
+                
+                # Se há tipos específicos permitidos, filtra
+                if tipos_permitidos and tipo not in tipos_permitidos:
+                    tipos_str = ", ".join(tipos_permitidos)
+                    print(f"DEBUG: ❌ Código descartado - Tipo '{tipo}' não permitido (apenas '{tipos_str}' são aceitos)")
+                else:
+                    resultados.append({
+                        "valor": codigo['valor'],
+                        "tipo": tipo,
+                        "confianca": codigo.get('confianca', 'N/A')
+                    })
+            
+            return resultados
+        
+        # Caso contrário, usa OpenCV (código original)
         img = cv2.imread(caminho_imagem)
 
         if img is None:
@@ -130,7 +188,40 @@ class DetectorBagagem:
             frame: Frame da câmera
             tipo_permitido: Tipo(s) de código permitido (ex: "I25", ["I25", "ITF"])
                            Se None, usa o tipo definido na classe. Se ainda for None, aceita todos.
+        
+        Usa Dynamsoft se disponível (recomendado para melhor precisão), 
+        caso contrário usa OpenCV.
         """
+        # Se usar Dynamsoft
+        if self.usar_dynamsoft and self.leitor:
+            resultados_brutos, frame_anotado = self.leitor.detectar_em_frame(frame)
+            
+            # Filtra pelos tipos permitidos
+            tipos_permitidos = self.tipos_permitidos
+            if tipo_permitido:
+                if isinstance(tipo_permitido, str):
+                    tipos_permitidos = [tipo_permitido]
+                else:
+                    tipos_permitidos = tipo_permitido
+            
+            resultados = []
+            for codigo in resultados_brutos:
+                tipo = codigo['tipo']
+                
+                # Se há tipos específicos permitidos, filtra
+                if tipos_permitidos and tipo not in tipos_permitidos:
+                    tipos_str = ", ".join(tipos_permitidos)
+                    print(f"DEBUG: ❌ Código descartado - Tipo '{tipo}' não permitido (apenas '{tipos_str}' são aceitos)")
+                else:
+                    resultados.append({
+                        "valor": codigo['valor'],
+                        "tipo": tipo,
+                        "confianca": codigo.get('confianca', 'N/A')
+                    })
+            
+            return resultados, frame_anotado
+        
+        # Caso contrário, usa OpenCV (código original)
         try:
             ok, decoded_info, decoded_type, points = self.barcode_detector.detectAndDecodeWithType(frame)
         except Exception as e:
